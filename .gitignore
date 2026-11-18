@@ -20,3 +20,6 @@ Thumbs.db
 
 # Local draft (superseded by APPROACH.md)
 TempApproach.md
+
+# Blind-test instructions are kept locally, not published
+submission/README.md
