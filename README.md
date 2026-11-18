@@ -1,4 +1,4 @@
-# Cantill Data & ML Intern Task — `ansh`
+# Cantill Data & ML Intern Task
 
 A config-driven spend pipeline that turns raw procurement files from different companies into one clean spend table:
 
