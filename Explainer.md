@@ -247,7 +247,7 @@ At blind test:
 
 - add only the C config,
 - run the frozen pipeline,
-- write A2/B2/C outputs into `submission/`,
+- write A2/B2/C outputs into `outputs/`,
 - push only the C config and three outputs,
 - make no code changes.
 
