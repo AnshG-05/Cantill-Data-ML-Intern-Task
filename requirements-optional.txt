@@ -1,0 +1,4 @@
+# Optional local zero-shot embedding engine.
+# The pipeline falls back to TF-IDF if these packages or the model are unavailable.
+sentence-transformers>=3.0
+torch>=2.0

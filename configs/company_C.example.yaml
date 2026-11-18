@@ -1,0 +1,141 @@
+# Template for the unseen company C.
+# At blind-test time, copy this file to company_C.yaml and change only paths,
+# column mappings, and any company-specific eligibility patterns.
+company: C
+description: Company C - unseen invoice-line data and taxonomy
+reporting_currency: USD
+
+paths:
+  data_dir: data/company_C
+  taxonomy: taxonomy_C.csv
+  labels: null
+  output: outputs/ansh__C.csv
+
+inputs:
+  - name: invoices
+    file: invoice_lines.csv
+    date_format: auto
+    record_id:
+      prefix: null
+      column: line_id
+    fields:
+      amount: line_amount
+      currency: currency
+      currency_rate: currency_rate
+      date: invoice_date
+      posting_date: posting_date
+      supplier: supplier_name
+      supplier_id: vendor_id
+      item_id: material_number
+      description: line_description
+      description2: gl_account_description
+      description3: supplier_type
+      description4: document_type
+      po: po_number
+      po_item: po_line
+      quantity: quantity
+      status: status
+      invoice: invoice_number
+      line: invoice_line
+      account: gl_account_description
+
+normalization:
+  vat:
+    enabled: false
+  fx:
+    enabled: true
+    rate_kind: units_per_usd
+    rate_field: currency_rate
+    month_field: posting_date
+    rate_file: fx_rates_usd.csv
+    rate_columns:
+      currency: currency
+      month: month
+      rate: units_per_usd
+    fallback_rate: 1.0
+  po:
+    extract_number_regex: null
+    extract_item_regex: null
+  text:
+    lowercase: false
+    collapse_whitespace: true
+
+eligibility:
+  status:
+    # Enable after inspecting C's status values; blank/unknown statuses are
+    # otherwise left untouched to avoid false exclusions.
+    enabled: false
+    field: status
+    allowed: [Paid, Approved, Posted, Completed]
+    exclude:
+      - values: [Cancelled, Canceled, Void, Voided]
+        reason: CANCELLED
+      - values: [Rejected, On Hold, Pending, Draft, Unapproved]
+        reason: NOT_APPROVED
+  non_procurement:
+    - name: intercompany_account
+      field: account_description
+      regex: '^\s*(IC[0-9 ]|IC$|I\s*/\s*C|INTERCOMPANY)'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+    - name: tax_description
+      field: description
+      regex: '(sales\s+tax|state\s*&\s*local\s+tax(es)?|gst\s+input\s+tax|tax\s+expense|\btaxes\b|use\s+tax)'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+  duplicates:
+    - name: exact_reexport
+      sources: [invoices]
+      fields: [source, invoice, line, supplier, supplier_id, item_id, description, description2, amount_raw, currency, date]
+      reason: DUPLICATE
+
+reconciliation:
+  enabled: false
+
+entities:
+  supplier:
+    id_fields: [supplier_id]
+    name_fields: [supplier]
+    use_labels: false
+    min_name_length: 3
+  item:
+    id_fields: [item_id]
+    name_fields: [description, description2]
+    use_labels: false
+    null_when_unknown: true
+    min_name_length: 4
+
+classification:
+  taxonomy:
+    file: taxonomy_C.csv
+    level_columns: [category_l1, category_l2, category_l3, category_l4]
+  labels: null
+  text_fields: [description, description2, description3, description4, item_id, supplier, account]
+  zero_shot:
+    method: hybrid_tfidf
+    weight: 1.0
+    smoothing:
+      knn:
+        enabled: true
+        k: 15
+        alpha: 0.5
+      group:
+        enabled: true
+        fields: [item_id, description_norm]
+        beta: 0.5
+    optional_embeddings:
+      enabled: true
+      model: intfloat/multilingual-e5-small
+      query_prefix: 'query: '
+      document_prefix: 'passage: '
+      document_template: '{levels}'
+      weight: 1.0
+  label_retrieval:
+    enabled: false
+  taxonomy_mention:
+    enabled: true
+    weight: 0.8
+  hierarchy: strict
+  confidence:
+    margin_scale: 2.5
+    base: 0.45

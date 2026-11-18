@@ -1,0 +1,173 @@
+company: A
+description: Company A - ERP goods receipts plus accounts-payable tool export
+reporting_currency: ZAR
+
+paths:
+  data_dir: data/company_A
+  taxonomy: taxonomy_A.csv
+  labels: labels_A.csv
+  output: outputs/ansh__A.csv
+
+inputs:
+  - name: erp
+    file: erp_goods_receipts.csv
+    date_format: auto
+    record_id:
+      prefix: ERP
+      column: line_id
+    fields:
+      amount: value_zar
+      currency: document_currency
+      currency_rate: null
+      date: posting_date
+      supplier: supplier_name
+      supplier_id: vendor_id
+      item_id: material_number
+      description: material_short_text
+      description2: service_short_text
+      description3: material_type
+      description4: uom
+      po: po_number
+      po_item: po_item
+      quantity: quantity
+      status: null
+      invoice: null
+      account: null
+
+  - name: tool
+    file: invoice_tool_export.csv
+    date_format: dayfirst
+    record_id:
+      prefix: TOOL
+      column: tool_record_id
+    fields:
+      amount: gross_amount
+      currency: currency
+      currency_rate: null
+      vat_rate: vat_rate
+      date: invoice_date
+      supplier: supplier_name_as_captured
+      supplier_id: null
+      item_id: null
+      description: line_text
+      description2: null
+      description3: null
+      description4: currency
+      po: po_reference
+      po_item: po_reference
+      quantity: quantity
+      status: status
+      invoice: invoice_number
+      account: null
+
+normalization:
+  vat:
+    enabled: true
+    apply_to: [tool]
+    rate_field: vat_rate
+    default_rate: 0.15
+    gross_to_net: true
+  fx:
+    enabled: false
+  po:
+    extract_number_regex: '\d{10}'
+    extract_item_regex: '/(\d+(?:\.\d+)?)'
+  text:
+    lowercase: false
+    collapse_whitespace: true
+
+eligibility:
+  status:
+    enabled: true
+    field: status
+    allowed: [Paid, Approved]
+    exclude:
+      - values: [Cancelled, Canceled, Void, Voided]
+        reason: CANCELLED
+      - values: [Rejected, On Hold, Pending, Draft, Unapproved]
+        reason: NOT_APPROVED
+  non_procurement: []
+  duplicates:
+    - name: repeated_tool_export
+      sources: [tool]
+      fields: [invoice, supplier, description, amount_raw]
+      reason: DUPLICATE
+
+reconciliation:
+  enabled: true
+  primary: erp
+  secondary: tool
+  blocking: [po]
+  amount_tolerance: 0.005
+  require_blocking_key: true
+  min_score: 65
+  weights:
+    amount: 35
+    po_item: 20
+    supplier: 20
+    text: 20
+    date: 5
+  keep: primary
+  reason: DUPLICATE
+
+entities:
+  supplier:
+    id_fields: [supplier_id]
+    name_fields: [supplier]
+    use_labels: true
+    transductive_vendor_coverage: true
+    coverage_sources: [erp]
+    coverage_threshold: 0.5
+    fuzzy_merge_threshold: 0.9
+    catchall_key: SUP:catch-all
+    min_name_length: 3
+  item:
+    id_fields: [item_id]
+    name_fields: [description, description2]
+    use_labels: true
+    null_when_id_missing: true
+    text_merge_prefixes: ['REPR ', 'TRNSP RD']
+    min_name_length: 4
+
+classification:
+  taxonomy:
+    file: taxonomy_A.csv
+    level_columns: [category_l1, category_l2, category_l3]
+  labels:
+    file: labels_A.csv
+    record_id_column: record_id
+    category_columns: [category_l1, category_l2, category_l3]
+    supplier_key_column: supplier_key
+    item_key_column: item_key
+  text_fields: [description, description2, description3, description4, item_id, supplier]
+  zero_shot:
+    method: hybrid_tfidf
+    weight: 1.0
+    smoothing:
+      knn:
+        enabled: false
+        k: 15
+        alpha: 0.5
+      group:
+        enabled: false
+        fields: [item_id, description_norm]
+        beta: 0.5
+    optional_embeddings:
+      enabled: false
+      model: intfloat/multilingual-e5-small
+      query_prefix: 'query: '
+      document_prefix: 'passage: '
+      document_template: '{l1} > {l2} > {l3}'
+      weight: 1.2
+  label_retrieval:
+    enabled: true
+    weight: 1.6
+    exact_fields: [item_id, description]
+    min_labels_per_category: 1
+  taxonomy_mention:
+    enabled: true
+    weight: 1.0
+  hierarchy: strict
+  confidence:
+    margin_scale: 2.5
+    base: 0.45

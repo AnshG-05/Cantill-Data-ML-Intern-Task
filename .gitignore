@@ -1,0 +1,22 @@
+# Raw/task data is confidential and must never be committed.
+data/
+*.zip
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local caches / logs
+.cache/
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Local draft (superseded by APPROACH.md)
+TempApproach.md

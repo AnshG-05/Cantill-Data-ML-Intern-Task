@@ -1,0 +1,138 @@
+company: B
+description: Company B - multi-ERP invoice lines with currency conversion
+reporting_currency: USD
+
+paths:
+  data_dir: data/company_B
+  taxonomy: taxonomy_B.csv
+  labels: seed_labels.csv
+  fx_rates: fx_rates_usd.csv
+  output: outputs/ansh__B.csv
+
+inputs:
+  - name: invoices
+    file: invoice_lines.csv
+    date_format: iso
+    record_id:
+      prefix: null
+      column: line_id
+    fields:
+      amount: line_amount
+      currency: currency
+      currency_rate: currency_rate
+      date: invoice_date
+      posting_date: posting_date
+      supplier: null
+      supplier_id: vendor_id
+      item_id: material_number
+      description: line_description
+      description2: gl_account_description
+      description3: supplier_type
+      description4: document_type
+      po: po_number
+      po_item: po_line
+      quantity: quantity
+      status: null
+      invoice: invoice_number
+      line: invoice_line
+      account: gl_account_description
+
+normalization:
+  vat:
+    enabled: false
+  fx:
+    enabled: true
+    rate_kind: units_per_usd
+    rate_field: currency_rate
+    month_field: posting_date
+    rate_file: fx_rates_usd.csv
+    rate_columns:
+      currency: currency
+      month: month
+      rate: units_per_usd
+    fallback_rate: null
+  po:
+    extract_number_regex: null
+    extract_item_regex: null
+  text:
+    lowercase: false
+    collapse_whitespace: true
+
+eligibility:
+  status:
+    enabled: false
+  non_procurement:
+    - name: intercompany_account
+      field: account_description
+      regex: '^\s*(IC[0-9 ]|IC$|I\s*/\s*C|INTERCOMPANY)'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+    - name: tax_description
+      field: description
+      regex: '(sales\s+tax|state\s*&\s*local\s+tax(es)?|gst\s+input\s+tax|tax\s+expense|\btaxes\b|use\s+tax)'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+  duplicates:
+    - name: exact_reexport
+      sources: [invoices]
+      fields: [source, invoice, line, item_id, description, description2, amount_raw, currency, date]
+      reason: DUPLICATE
+
+reconciliation:
+  enabled: false
+
+entities:
+  supplier:
+    id_fields: [supplier_id]
+    name_fields: []
+    use_labels: false
+    min_name_length: 3
+  item:
+    id_fields: [item_id]
+    name_fields: [description]
+    use_labels: false
+    null_when_unknown: true
+    min_name_length: 4
+
+classification:
+  taxonomy:
+    file: taxonomy_B.csv
+    level_columns: [category_l1, category_l2, category_l3]
+  labels:
+    file: seed_labels.csv
+    record_id_column: line_id
+    category_columns: [category_l1, category_l2, category_l3]
+    include_column: include
+  text_fields: [description, description2, description3, description4, item_id, account, po]
+  zero_shot:
+    method: hybrid_tfidf
+    weight: 1.0
+    smoothing:
+      knn:
+        enabled: false
+        k: 15
+        alpha: 0.5
+      group:
+        enabled: false
+        fields: [item_id, description_norm]
+        beta: 0.5
+    optional_embeddings:
+      enabled: false
+      model: intfloat/multilingual-e5-small
+      query_prefix: 'query: '
+      document_prefix: 'passage: '
+      document_template: '{l1} > {l2} > {l3}'
+      weight: 0.8
+  label_retrieval:
+    enabled: true
+    weight: 1.8
+    exact_fields: [item_id, description]
+    min_labels_per_category: 1
+    included_only: true
+  taxonomy_mention:
+    enabled: true
+    weight: 0.8
+  hierarchy: strict
+  confidence:
+    margin_scale: 2.5
+    base: 0.45
