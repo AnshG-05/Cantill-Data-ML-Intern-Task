@@ -50,7 +50,7 @@ Example — zero-label A2 output:
 ```powershell
 & "C:\Users\Admin\anaconda3\python.exe" run.py `
   --config configs/company_A.yaml `
-  --output outputs/ansh__A2.csv `
+  --output submission/ansh__A2.csv `
   --no-labels --embeddings --smoothing
 ```
 
