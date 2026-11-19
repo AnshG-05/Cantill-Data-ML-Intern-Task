@@ -1,0 +1,127 @@
+company: C
+description: Company C - unseen invoice lines with four-level category tree
+reporting_currency: USD
+
+paths:
+  data_dir: data/company_C
+  taxonomy: taxonomy_C.csv
+  labels: null
+  output: submission/ansh__C.csv
+
+inputs:
+  - name: invoices
+    file: invoice_lines.csv
+    date_format: auto
+    record_id:
+      prefix: null
+      column: line_id
+    fields:
+      amount: line_amount_usd
+      currency: null
+      currency_rate: null
+      date: invoice_date
+      posting_date: status_date
+      supplier: supplier_name
+      supplier_id: null
+      item_id: product_service_code
+      description: line_description
+      description2: product_service_description
+      description3: invoice_description
+      description4: gl_account_description
+      po: null
+      po_item: null
+      quantity: quantity
+      status: status
+      invoice: invoice_number
+      line: invoice_line
+      account: gl_account_description
+
+normalization:
+  vat:
+    enabled: false
+  fx:
+    enabled: false
+  po:
+    extract_number_regex: null
+    extract_item_regex: null
+  text:
+    lowercase: false
+    collapse_whitespace: true
+
+eligibility:
+  status:
+    enabled: true
+    field: status
+    allowed: [Approved]
+    exclude:
+      - values: [Cancelled, Canceled, Void, Voided]
+        reason: CANCELLED
+      - values: [Rejected, On Hold, Pending, Draft, Unapproved, Declined]
+        reason: NOT_APPROVED
+  non_procurement:
+    - name: sales_tax_line
+      field: description3
+      regex: '^\s*(SALESTAX|SALES\s+TAX|USE\s+TAX)\s*$'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+    - name: non_procurement_account
+      field: account
+      regex: '^\s*(AR\s+.*CLEARING|ACCRUED\s+.*TAX|MISCELLANEOUS\s+RECEIVABLE)'
+      flags: ignorecase
+      reason: NON_PROCUREMENT
+  duplicates:
+    - name: repeated_invoice_line
+      sources: [invoices]
+      fields: [invoice, line]
+      reason: DUPLICATE
+
+reconciliation:
+  enabled: false
+
+entities:
+  supplier:
+    id_fields: []
+    name_fields: [supplier]
+    use_labels: false
+    min_name_length: 3
+  item:
+    id_fields: [item_id]
+    name_fields: [description, description2]
+    use_labels: false
+    null_when_unknown: true
+    min_name_length: 4
+
+classification:
+  taxonomy:
+    file: taxonomy_C.csv
+    level_columns: [level_1, level_2, level_3, level_4]
+  labels: null
+  text_fields: [description, description2, description3, description4, item_id, supplier, submission_type]
+  zero_shot:
+    method: hybrid_tfidf
+    weight: 1.0
+    smoothing:
+      knn:
+        enabled: true
+        k: 15
+        alpha: 0.5
+      group:
+        enabled: true
+        fields: [item_id, description_norm]
+        beta: 0.5
+    optional_embeddings:
+      enabled: false
+      model: intfloat/multilingual-e5-small
+      query_prefix: 'query: '
+      document_prefix: 'passage: '
+      document_template: '{levels}'
+      weight: 1.0
+  label_retrieval:
+    enabled: false
+  taxonomy_mention:
+    enabled: true
+    weight: 0.8
+  hierarchy: strict
+  confidence:
+    margin_scale: 2.5
+    base: 0.45
